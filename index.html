@@ -67,7 +67,7 @@ main{padding-top:14px}
 .swapnote{padding:0 14px 8px;font-size:.8rem;color:var(--teal);font-weight:600}
 .act:disabled{opacity:.35;cursor:not-allowed}
 .actual{margin:0 14px 10px;padding:8px 10px;border-radius:10px;background:var(--bg);font-size:.93rem}
-.actions{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:0 10px 12px}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:0 10px 12px}
 .act{min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);
   border-radius:10px;padding:10px 2px;font:inherit;font-size:.76rem;font-weight:600;cursor:pointer}
 .act[aria-pressed="true"].a-ok{background:var(--green);border-color:var(--green);color:#fff}
@@ -107,6 +107,11 @@ nav.tabs button.on{color:var(--teal);background:var(--swap-bg)}
 .backup p{margin:0 0 10px;font-size:.85rem;color:var(--muted)}
 .brow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .brow button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 4px;font:inherit;font-size:.85rem;font-weight:600;cursor:pointer}
+.swaprow{display:flex;gap:6px;padding:0 10px 12px}
+.swaprow button{flex:1;border:1px dashed var(--teal);background:transparent;color:var(--teal);border-radius:10px;padding:9px 6px;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer}
+.swaprow button:disabled{opacity:.4;cursor:not-allowed}
+.hint{padding:0 14px 10px;font-size:.78rem;color:var(--muted)}
+.cell.swapped{box-shadow:inset 0 0 0 2px var(--teal)}
 button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
 </style>
 </head>
@@ -147,10 +152,10 @@ const PLAN=[
  {colazione:"Yogurt greco 0% 150g, 1 frutto",sp_matt:"Frutta secca 10g",pranzo:"Pasta 70g al pomodoro + cacioricotta, pesce 200g, insalata verde",sp_pom:"1 frutto",cena:"Insalata con straccetti di pollo 150g, pomodori, caroselli, carote, rucola"}
 ];
 const SWAP_GROUP={colazione:["colazione"],sp_matt:["sp_matt","sp_pom"],sp_pom:["sp_matt","sp_pom"],pranzo:["pranzo","cena"],cena:["pranzo","cena"]};
-const STATES=[["ok","Fatto"],["swap","Scambiato"],["other","Altro"],["free","Libero"],["skip","Saltato"]];
+const STATES=[["ok","Fatto"],["other","Altro"],["free","Libero"],["skip","Saltato"]];
 const LABEL=Object.fromEntries(STATES);
-const LETTER={ok:"✓",swap:"⇄",other:"A",free:"L",skip:"✕"};
-const COLOR={ok:"green",swap:"teal",other:"amber",free:"plum",skip:"skip"};
+const LETTER={ok:"✓",other:"A",free:"L",skip:"✕"};
+const COLOR={ok:"green",other:"amber",free:"plum",skip:"skip"};
 const MEAL_NAME=Object.fromEntries(MEALS);
 const LS_KEY="diario_pasti_v1";
 
@@ -160,17 +165,42 @@ const dayIdx=d=>(d.getDay()+6)%7;
 const fromIso=s=>{const [y,m,dd]=s.split("-").map(Number);return new Date(y,m-1,dd)};
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
 const monday=d=>addDays(d,-dayIdx(d));
-const slotName=(di,m)=>MEAL_NAME[m]+" di "+DAYS[di];
-
-let cur=new Date(); cur.setHours(0,0,0,0);
-let view="day", openMeal=null;
-let logs={};             // iso -> {slots:{}, note:""}
-const dirty=new Set();   // keys changed locally and not yet confirmed by the server
-
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const clone=o=>JSON.parse(JSON.stringify(o||{slots:{},note:""}));
+
+let cur=new Date(); cur.setHours(0,0,0,0);
+let view="day", openMeal=null, openSwap=null;
+let logs={};   // iso -> {slots:{meal:{s,txt}}, assign:{meal:"iso|meal"}, note}
 function getLog(k){return logs[k]||{slots:{},note:""}}
+
+/* ---------- plan and swaps ----------
+   A "slot" is "iso|meal". Each slot is assigned one meal of the plan (by default its own).
+   A swap exchanges the assigned meals of two slots in the same week, so every planned meal
+   appears exactly once per week however many swaps are made. */
+const slotKey=(k,m)=>k+"|"+m;
+const splitSlot=v=>{const i=v.lastIndexOf("|");return [v.slice(0,i),v.slice(i+1)]};
+const slotName=v=>{const [k,m]=splitSlot(v);return MEAL_NAME[m]+" di "+DAYS[dayIdx(fromIso(k))]};
+const planText=v=>{const [k,m]=splitSlot(v);return PLAN[dayIdx(fromIso(k))][m]};
+function assigned(v){const [k,m]=splitSlot(v);return (logs[k]&&logs[k].assign&&logs[k].assign[m])||v}
+function setAssign(v,val){
+  const [k,m]=splitSlot(v),L=clone(getLog(k));
+  L.assign=L.assign||{};
+  if(val===v) delete L.assign[m]; else L.assign[m]=val;
+  if(!Object.keys(L.assign).length) delete L.assign;
+  logs[k]=L;
+}
+function exchange(a,b){const va=assigned(a),vb=assigned(b);setAssign(a,vb);setAssign(b,va)}
+function weekSlots(d,meals){
+  const mon=monday(d),out=[];
+  for(let i=0;i<7;i++){const k=iso(addDays(mon,i));for(const m of meals) out.push(slotKey(k,m))}
+  return out;
+}
+const isMarked=v=>{const [k,m]=splitSlot(v);return !!getLog(k).slots[m]};
+function holderOf(origin,d){ // slot in the week currently holding meal `origin`
+  const [,m]=splitSlot(origin);
+  return weekSlots(d,SWAP_GROUP[m]).find(v=>assigned(v)===origin);
+}
 
 /* ---------- saving (this device only) ---------- */
 function status(t){$("status").textContent=t}
@@ -178,12 +208,30 @@ function saveLocal(){
   try{localStorage.setItem(LS_KEY,JSON.stringify(logs));status("Salvato su questo iPhone")}
   catch(e){status("Salvataggio non riuscito: esporta un backup.")}
 }
-function commit(k){saveLocal()}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveLocal()});
 window.addEventListener("pagehide",saveLocal);
 
+// Convert data from the previous version (status "swap" with from="dayIndex|meal")
+function migrate(){
+  let changed=false;
+  for(const k of Object.keys(logs).sort()){
+    const L=logs[k]; if(!L||!L.slots) continue;
+    for(const m of Object.keys(L.slots)){
+      const sl=L.slots[m];
+      if(sl&&sl.s==="swap"){
+        if(sl.from&&/^\d\|/.test(sl.from)){
+          const [di,fm]=sl.from.split("|");
+          const src=slotKey(iso(addDays(monday(fromIso(k)),+di)),fm), me=slotKey(k,m);
+          if(assigned(me)===me&&assigned(src)===src) exchange(me,src);
+        }
+        logs[k].slots[m]={s:"ok"}; changed=true;
+      }
+    }
+  }
+  if(changed) saveLocal();
+}
+
 /* ---------- backup ---------- */
-const MEAL_ORDER=MEALS.map(m=>m[0]);
 function stamp(){const d=new Date();return iso(d)+"_"+pad(d.getHours())+pad(d.getMinutes())}
 async function deliver(filename,text,type){
   const blob=new Blob([text],{type});
@@ -195,20 +243,20 @@ async function deliver(filename,text,type){
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
 }
 function exportJSON(){
-  deliver("diario_pasti_"+stamp()+".json",JSON.stringify({app:"diario_pasti",version:1,exported:new Date().toISOString(),logs},null,1),"application/json");
+  deliver("diario_pasti_"+stamp()+".json",JSON.stringify({app:"diario_pasti",version:2,exported:new Date().toISOString(),logs},null,1),"application/json");
 }
 function csvCell(v){v=String(v??"");return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
 function exportCSV(){
-  const rows=[["data","giorno","pasto","stato","dettaglio","previsto_da_piano","nota_giorno"]];
+  const rows=[["data","giorno","pasto","previsto","scambiato_con","stato","dettaglio","nota_giorno"]];
   for(const k of Object.keys(logs).sort()){
-    const d=fromIso(k),di=dayIdx(d),L=logs[k],W=weekSwaps(d);
-    for(const m of MEAL_ORDER){
-      const sl=L.slots[m]; if(!sl) continue;
-      rows.push([k,DAYS[di],MEAL_NAME[m],LABEL[sl.s],describe(sl),effectivePlan(di,m,W).text,""]);
+    const di=dayIdx(fromIso(k)),L=logs[k];
+    for(const [m,name] of MEALS){
+      const v=slotKey(k,m),a=assigned(v),sl=L.slots&&L.slots[m];
+      if(!sl&&a===v) continue;
+      rows.push([k,DAYS[di],name,planText(a),a===v?"":slotName(a),sl?LABEL[sl.s]:"",sl&&sl.txt||""]);
     }
-    if(L.note) rows.push([k,DAYS[di],"","","","",L.note]);
+    if(L.note) rows.push([k,DAYS[di],"","","","","",L.note]);
   }
-  // semicolon + BOM so Excel/Numbers in Italian locale open it correctly
   deliver("diario_pasti_"+stamp()+".csv","\ufeff"+rows.map(r=>r.map(csvCell).join(";")).join("\n"),"text/csv");
 }
 function importJSON(file){
@@ -221,42 +269,17 @@ function importJSON(file){
     const keys=Object.keys(inc).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k));
     const overlap=keys.filter(k=>logs[k]).length;
     if(!confirm("Importare "+keys.length+" giorni?"+(overlap?" "+overlap+" giorni già presenti verranno sostituiti.":""))) return;
-    for(const k of keys){const v=inc[k];logs[k]={slots:(v&&v.slots)||{},note:(v&&v.note)||""}}
-    saveLocal();render();alert("Importati "+keys.length+" giorni.");
+    for(const k of keys){const v=inc[k]||{};logs[k]={slots:v.slots||{},note:v.note||"",...(v.assign?{assign:v.assign}:{})}}
+    migrate();saveLocal();render();alert("Importati "+keys.length+" giorni.");
   };
   r.readAsText(file);
 }
 
-/* ---------- swaps within the week ---------- */
-// Returns info for the week containing date d:
-//  takenBy[slot]  = slot that took this slot's meal   (slot = "di|meal")
-//  gave[slot]     = slot whose meal this slot ate
-function weekSwaps(d){
-  const mon=monday(d), takenBy={}, gave={};
-  for(let i=0;i<7;i++){
-    const L=getLog(iso(addDays(mon,i)));
-    for(const [m] of MEALS){
-      const s=L.slots[m];
-      if(s&&s.s==="swap"&&s.from){const me=i+"|"+m; gave[me]=s.from; takenBy[s.from]=me;}
-    }
-  }
-  return {takenBy,gave};
-}
-// What the plan says for a slot after swaps: if another slot ate my meal, I get that slot's original meal.
-function effectivePlan(di,m,W){
-  const me=di+"|"+m, taker=W.takenBy[me];
-  if(taker){const [tdi,tm]=taker.split("|");return {text:PLAN[+tdi][tm],note:"Scambiato con "+slotName(+tdi,tm).toLowerCase()}}
-  return {text:PLAN[di][m],note:""};
-}
-function describe(slot){
-  if(!slot) return "";
-  if(slot.s==="swap"&&slot.from){const [di,m]=slot.from.split("|");return slotName(+di,m)+": "+PLAN[+di][m]}
-  return slot.txt||"";
-}
+/* ---------- actions ---------- */
 function setSlot(k,meal,patch){
   const L=clone(getLog(k)), next={...(L.slots[meal]||{}),...patch};
   if(!next.s) delete L.slots[meal]; else L.slots[meal]=next;
-  logs[k]=L; commit(k); render();
+  logs[k]=L; saveLocal(); render();
 }
 
 /* ---------- rendering ---------- */
@@ -268,27 +291,34 @@ function renderStrip(){
     return `<button class="chip ${k===iso(cur)?"on":""} ${k===today?"today":""}" data-k="${k}">
       <div class="d">${d.slice(0,3)}</div><div class="n">${dt.getDate()}</div><div class="dots">${dots}</div></button>`;
   }).join("");
-  $("strip").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{cur=fromIso(b.dataset.k);openMeal=null;render()});
+  $("strip").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{cur=fromIso(b.dataset.k);openMeal=openSwap=null;render()});
 }
 
 function renderDay(){
-  const k=iso(cur),di=dayIdx(cur),L=getLog(k),W=weekSwaps(cur);
+  const k=iso(cur),di=dayIdx(cur),L=getLog(k);
   $("title").textContent=DAYS[di];
   $("subtitle").textContent=cur.toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});
   let html="";
   for(const [m,name] of MEALS){
-    const slot=L.slots[m], s=slot?.s, me=di+"|"+m;
-    const eff=effectivePlan(di,m,W);
-    const isSource=!!W.takenBy[me];
-    const swapOpts=swapOptions(di,m,W);
-    const canSwap=!isSource&&(s==="swap"||swapOpts.some(o=>!o.disabled));
-    html+=`<article class="meal ${s?"st-"+s:""}">
+    const v=slotKey(k,m), a=assigned(v), swapped=a!==v;
+    const slot=L.slots[m], s=slot?.s;
+    const targets=weekSlots(cur,SWAP_GROUP[m]).filter(x=>x!==v);
+    const canSwap=!s&&targets.some(x=>!isMarked(x));
+    let undoOk=false;
+    if(swapped){const h=holderOf(v,cur);undoOk=!s&&h&&!isMarked(h);}
+    html+=`<article class="meal ${s?"st-"+s:swapped?"st-swap":""}">
       <div class="mhead"><span class="mname">${name}</span>${s?`<span class="badge b-${s}">${LABEL[s]}</span>`:""}</div>
-      ${eff.note?`<div class="swapnote">${esc(eff.note)}</div>`:""}
-      <div class="planned ${s&&s!=="ok"?"strike":""}">${esc(eff.text)}</div>
-      ${s&&s!=="ok"&&describe(slot)?`<div class="actual">${esc(describe(slot))}</div>`:""}
-      <div class="actions">${STATES.map(([id,lab])=>`<button class="act a-${id}" aria-pressed="${s===id}" data-m="${m}" data-s="${id}" ${id==="swap"&&!canSwap?"disabled":""}>${lab}</button>`).join("")}</div>
-      ${openMeal===m&&s&&s!=="ok"?editor(m,slot,swapOpts):""}
+      ${swapped?`<div class="swapnote">⇄ In origine: ${esc(slotName(a).toLowerCase())}</div>`:""}
+      <div class="planned ${s&&s!=="ok"?"strike":""}">${esc(planText(a))}</div>
+      ${s&&s!=="ok"&&slot.txt?`<div class="actual">${esc(slot.txt)}</div>`:""}
+      <div class="actions">${STATES.map(([id,lab])=>`<button class="act a-${id}" aria-pressed="${s===id}" data-m="${m}" data-s="${id}">${lab}</button>`).join("")}</div>
+      ${openMeal===m&&s&&s!=="ok"?textEditor(m,slot):""}
+      <div class="swaprow">
+        <button data-swap="${m}" ${canSwap?"":"disabled"}>${openSwap===m?"Chiudi":"Scambia"}</button>
+        ${swapped?`<button data-undo="${m}" ${undoOk?"":"disabled"}>Annulla scambio</button>`:""}
+      </div>
+      ${s?`<div class="hint">Per scambiare questo pasto togli prima lo stato.</div>`:""}
+      ${openSwap===m&&canSwap?swapEditor(v,targets):""}
     </article>`;
   }
   html+=`<div class="notes"><label for="note">Note del giorno</label>
@@ -297,39 +327,38 @@ function renderDay(){
 
   $("dayView").querySelectorAll(".act").forEach(b=>b.onclick=()=>{
     const m=b.dataset.m,s=b.dataset.s,curS=getLog(k).slots[m]?.s;
+    openSwap=null;
     if(curS===s){
-      if(s==="ok"||openMeal===m){openMeal=null;setSlot(k,m,{s:null,from:null,txt:null});}
+      if(s==="ok"||openMeal===m){openMeal=null;setSlot(k,m,{s:null,txt:null});}
       else{openMeal=m;render();}
       return;
     }
-    let from=null;
-    if(s==="swap"){const first=swapOptions(di,m,weekSwaps(cur)).find(o=>!o.disabled);if(!first) return;from=first.value;}
     openMeal=(s==="ok")?null:m;
-    setSlot(k,m,{s,from,txt:(s==="ok"||s==="swap")?null:(getLog(k).slots[m]?.txt||"")});
+    setSlot(k,m,{s,txt:s==="ok"?null:(getLog(k).slots[m]?.txt||"")});
   });
-  const sel=$("dayView").querySelector("select");
-  if(sel) sel.onchange=()=>setSlot(k,sel.dataset.m,{from:sel.value});
+  $("dayView").querySelectorAll("[data-swap]").forEach(b=>b.onclick=()=>{openSwap=openSwap===b.dataset.swap?null:b.dataset.swap;openMeal=null;render()});
+  $("dayView").querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{
+    const v=slotKey(k,b.dataset.undo),h=holderOf(v,cur);
+    if(h){exchange(v,h);saveLocal();openSwap=null;render();}
+  });
+  const sel=$("dayView").querySelector("select[data-swapfrom]");
+  if(sel) $("dayView").querySelector("[data-confirm]").onclick=()=>{
+    if(!sel.value) return;
+    exchange(sel.dataset.swapfrom,sel.value);saveLocal();openSwap=null;render();
+  };
   const ta=$("dayView").querySelector("textarea[data-m]");
-  if(ta) ta.oninput=()=>{const L2=clone(getLog(k));L2.slots[ta.dataset.m]={...L2.slots[ta.dataset.m],txt:ta.value};logs[k]=L2;commit(k);};
-  $("note").oninput=e=>{const L2=clone(getLog(k));L2.note=e.target.value;logs[k]=L2;commit(k);};
+  if(ta) ta.oninput=()=>{const L2=clone(getLog(k));L2.slots[ta.dataset.m]={...L2.slots[ta.dataset.m],txt:ta.value};logs[k]=L2;saveLocal();};
+  $("note").oninput=e=>{const L2=clone(getLog(k));L2.note=e.target.value;logs[k]=L2;saveLocal();};
 }
-
-// A meal can be used in only one swap per week: slots already given away, or whose own meal was replaced, are excluded.
-function swapOptions(di,m,W){
-  const me=di+"|"+m, mine=W.gave[me]||null, opts=[];
-  for(let d=0;d<7;d++) for(const g of SWAP_GROUP[m]){
-    const v=d+"|"+g;
-    if(v===me) continue;
-    const used=(W.takenBy[v]&&W.takenBy[v]!==me)||(W.gave[v]&&v!==mine);
-    opts.push({value:v,disabled:!!used&&v!==mine,label:slotName(d,g)+" — "+PLAN[d][g]+(used&&v!==mine?" (già scambiato)":"")});
-  }
-  return opts;
+function swapEditor(v,targets){
+  const opts=targets.map(x=>{
+    const dis=isMarked(x);
+    return `<option value="${x}" ${dis?"disabled":""}>${esc(slotName(x))}: ${esc(planText(assigned(x)))}${dis?" (già segnato)":""}</option>`;
+  }).join("");
+  return `<div class="editor"><select data-swapfrom="${v}" aria-label="Scambia con"><option value="">Scambia con…</option>${opts}</select>
+    <div class="swaprow" style="padding:0"><button data-confirm>Conferma scambio</button></div></div>`;
 }
-function editor(m,slot,opts){
-  if(slot.s==="swap"){
-    return `<div class="editor"><select data-m="${m}" aria-label="Pasto mangiato al posto di quello previsto">${
-      opts.map(o=>`<option value="${o.value}" ${slot.from===o.value?"selected":""} ${o.disabled?"disabled":""}>${esc(o.label)}</option>`).join("")}</select></div>`;
-  }
+function textEditor(m,slot){
   const ph={other:"Cosa hai mangiato?",free:"Cosa hai mangiato? (facoltativo)",skip:"Motivo (facoltativo)"}[slot.s];
   return `<div class="editor"><textarea data-m="${m}" placeholder="${ph}">${esc(slot.txt||"")}</textarea></div>`;
 }
@@ -339,22 +368,27 @@ function renderWeek(){
   $("title").textContent="Settimana";
   $("subtitle").textContent=mon.toLocaleDateString("it-IT",{day:"numeric",month:"short"})+" – "+sun.toLocaleDateString("it-IT",{day:"numeric",month:"short"});
   let g=`<div class="grid"><div></div>${DAYS.map(d=>`<div class="h">${d.slice(0,3)}</div>`).join("")}`;
-  const counts={ok:0,swap:0,other:0,free:0,skip:0};
+  const counts={ok:0,other:0,free:0,skip:0}; let nSwap=0;
   for(const [m,name] of MEALS){
     g+=`<div class="rl">${name.replace("Spuntino ","Sp. ")}</div>`;
     for(let i=0;i<7;i++){
-      const k=iso(addDays(mon,i)),s=getLog(k).slots[m]?.s;
-      if(s) counts[s]++;
-      g+=`<button class="cell ${s?"c-"+s:""}" data-k="${k}" aria-label="${name} ${DAYS[i]}: ${s?LABEL[s]:"non segnato"}">${s?LETTER[s]:""}</button>`;
+      const k=iso(addDays(mon,i)),v=slotKey(k,m),s=getLog(k).slots[m]?.s,sw=assigned(v)!==v;
+      if(s) counts[s]++; if(sw) nSwap++;
+      g+=`<button class="cell ${s?"c-"+s:""} ${sw?"swapped":""}" data-k="${k}" aria-label="${name} ${DAYS[i]}: ${s?LABEL[s]:"non segnato"}${sw?", scambiato":""}">${s?LETTER[s]:sw?"⇄":""}</button>`;
     }
   }
   g+=`</div>`;
-  const legend=`<div class="legend">${STATES.map(([id,l])=>`<span><i style="background:var(--${COLOR[id]})"></i>${l} ${counts[id]}</span>`).join("")}</div>`;
+  const legend=`<div class="legend">${STATES.map(([id,l])=>`<span><i style="background:var(--${COLOR[id]})"></i>${l} ${counts[id]}</span>`).join("")}<span><i style="box-shadow:inset 0 0 0 2px var(--teal)"></i>Pasti spostati ${nSwap}</span></div>`;
   let list="";
   for(let i=0;i<7;i++){
     const k=iso(addDays(mon,i)),L=getLog(k);
-    const rows=MEALS.filter(([m])=>L.slots[m]&&L.slots[m].s!=="ok").map(([m,n])=>{const sl=L.slots[m];return `<p><b>${n}</b> <span class="m">(${LABEL[sl.s]})</span> ${esc(describe(sl))}</p>`});
-    if(rows.length||L.note) list+=`<h3 style="text-transform:capitalize">${DAYS[i]} ${addDays(mon,i).getDate()}</h3>${rows.join("")}${L.note?`<p class="m">Nota: ${esc(L.note)}</p>`:""}`;
+    const rows=MEALS.map(([m,n])=>{
+      const v=slotKey(k,m),a=assigned(v),sl=L.slots[m],parts=[];
+      if(a!==v) parts.push(`⇄ ${esc(slotName(a).toLowerCase())}`);
+      if(sl&&sl.s!=="ok") parts.push(`<span class="m">(${LABEL[sl.s]})</span> ${esc(sl.txt||"")}`);
+      return parts.length?`<p><b>${n}</b> ${parts.join(" · ")}</p>`:"";
+    }).join("");
+    if(rows||L.note) list+=`<h3 style="text-transform:capitalize">${DAYS[i]} ${addDays(mon,i).getDate()}</h3>${rows}${L.note?`<p class="m">Nota: ${esc(L.note)}</p>`:""}`;
   }
   const backup=`<div class="backup"><h3>Backup</h3>
     <p>I dati sono salvati solo su questo iPhone. Esporta un backup ogni tanto; il CSV si apre con Numbers o Excel.</p>
@@ -383,11 +417,12 @@ function setView(v){
 }
 $("tabDay").onclick=()=>setView("day");
 $("tabWeek").onclick=()=>setView("week");
-$("prev").onclick=()=>{cur=addDays(cur,view==="day"?-1:-7);openMeal=null;render()};
-$("next").onclick=()=>{cur=addDays(cur,view==="day"?1:7);openMeal=null;render()};
+$("prev").onclick=()=>{cur=addDays(cur,view==="day"?-1:-7);openMeal=openSwap=null;render()};
+$("next").onclick=()=>{cur=addDays(cur,view==="day"?1:7);openMeal=openSwap=null;render()};
 
 /* ---------- startup ---------- */
 try{logs=JSON.parse(localStorage.getItem(LS_KEY)||"{}")||{}}catch(e){logs={}}
+migrate();
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
 render();
 status(Object.keys(logs).length?"Salvato su questo iPhone":"Nessun dato ancora: inizia a segnare i pasti.");
