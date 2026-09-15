@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diario pasti</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Diario pasti">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1F6F7A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F8F3; --surface:#FFFFFF; --ink:#1B2B2E; --muted:#667578; --line:#DFE6DA;
+  --teal:#1F6F7A; --green:#7FAA2E; --amber:#C98A12; --plum:#8A5A9E; --skip:#B4574A;
+  --ok-bg:#EAF3DA; --swap-bg:#DDEEF0; --other-bg:#F8EDD5; --free-bg:#EFE4F4; --skip-bg:#F4E1DE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121A1B; --surface:#1B2527; --ink:#E7EEEC; --muted:#93A3A5; --line:#2C3A3C;
+    --teal:#5DB3BF; --green:#A6CF5A; --amber:#E7B04A; --plum:#C295D6; --skip:#E08A7D;
+    --ok-bg:#27351A; --swap-bg:#1A3336; --other-bg:#3A2F17; --free-bg:#33273A; --skip-bg:#3A2320;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121A1B; --surface:#1B2527; --ink:#E7EEEC; --muted:#93A3A5; --line:#2C3A3C;
+  --teal:#5DB3BF; --green:#A6CF5A; --amber:#E7B04A; --plum:#C295D6; --skip:#E08A7D;
+  --ok-bg:#27351A; --swap-bg:#1A3336; --other-bg:#3A2F17; --free-bg:#33273A; --skip-bg:#3A2320;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:Figtree,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4;
+  padding:env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.daterow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.daterow h1{margin:0;font-size:1.55rem;font-weight:800;letter-spacing:-.01em;text-transform:capitalize}
+.daterow .sub{color:var(--muted);font-size:.9rem}
+.navbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink);width:40px;height:40px;border-radius:50%;
+  font-size:1.2rem;display:grid;place-items:center;cursor:pointer}
+.strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px}
+.chip{border:0;background:transparent;color:var(--ink);padding:6px 0 8px;border-radius:12px;cursor:pointer;font:inherit}
+.chip .d{font-size:.72rem;color:var(--muted);text-transform:capitalize}
+.chip .n{font-weight:700;font-size:1.05rem}
+.chip .dots{display:flex;justify-content:center;gap:2px;margin-top:4px;height:5px}
+.chip .dots i{width:5px;height:5px;border-radius:50%;background:var(--line)}
+.chip.on{background:var(--teal);color:#fff}
+.chip.on .d{color:#ffffffcc}
+.chip.today .n{text-decoration:underline;text-underline-offset:3px}
+main{padding-top:14px}
+.meal{background:var(--surface);border:1px solid var(--line);border-radius:16px;margin-bottom:10px;overflow:hidden}
+.meal.st-ok{border-left:6px solid var(--green)} .meal.st-swap{border-left:6px solid var(--teal)}
+.meal.st-other{border-left:6px solid var(--amber)} .meal.st-free{border-left:6px solid var(--plum)}
+.meal.st-skip{border-left:6px solid var(--skip)}
+.mhead{display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px 2px}
+.mname{font-weight:700;font-size:1.02rem}
+.badge{font-size:.78rem;font-weight:600;padding:2px 8px;border-radius:999px}
+.b-ok{background:var(--ok-bg);color:var(--green)} .b-swap{background:var(--swap-bg);color:var(--teal)}
+.b-other{background:var(--other-bg);color:var(--amber)} .b-free{background:var(--free-bg);color:var(--plum)}
+.b-skip{background:var(--skip-bg);color:var(--skip)}
+.planned{padding:2px 14px 10px;color:var(--muted);font-size:.93rem}
+.planned.strike{text-decoration:line-through;opacity:.6}
+.swapnote{padding:0 14px 8px;font-size:.8rem;color:var(--teal);font-weight:600}
+.act:disabled{opacity:.35;cursor:not-allowed}
+.actual{margin:0 14px 10px;padding:8px 10px;border-radius:10px;background:var(--bg);font-size:.93rem}
+.actions{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:0 10px 12px}
+.act{min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:10px;padding:10px 2px;font:inherit;font-size:.76rem;font-weight:600;cursor:pointer}
+.act[aria-pressed="true"].a-ok{background:var(--green);border-color:var(--green);color:#fff}
+.act[aria-pressed="true"].a-swap{background:var(--teal);border-color:var(--teal);color:#fff}
+.act[aria-pressed="true"].a-other{background:var(--amber);border-color:var(--amber);color:#fff}
+.act[aria-pressed="true"].a-free{background:var(--plum);border-color:var(--plum);color:#fff}
+.act[aria-pressed="true"].a-skip{background:var(--skip);border-color:var(--skip);color:#fff}
+.editor{padding:0 14px 14px;display:grid;gap:8px}
+select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);
+  border-radius:10px;padding:10px}
+textarea{min-height:64px;resize:vertical}
+.notes{margin-top:6px}
+.notes label{font-weight:700;display:block;margin-bottom:6px}
+.status{color:var(--muted);font-size:.8rem;text-align:center;margin:12px 0}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
+  display:flex;padding:8px 16px calc(8px + env(safe-area-inset-bottom));z-index:6}
+nav.tabs button{flex:1;border:0;background:none;font:inherit;font-weight:600;color:var(--muted);padding:10px;border-radius:10px;cursor:pointer}
+nav.tabs button.on{color:var(--teal);background:var(--swap-bg)}
+.grid{display:grid;grid-template-columns:78px repeat(7,1fr);gap:4px;font-size:.78rem}
+.grid .h{font-weight:700;text-align:center;color:var(--muted);padding:4px 0;text-transform:capitalize}
+.grid .rl{font-weight:600;display:flex;align-items:center}
+.cell{aspect-ratio:1;border-radius:8px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;
+  font-weight:800;font-size:.8rem;cursor:pointer;padding:0;color:var(--ink)}
+.c-ok{background:var(--green);border-color:var(--green);color:#fff}
+.c-swap{background:var(--teal);border-color:var(--teal);color:#fff}
+.c-other{background:var(--amber);border-color:var(--amber);color:#fff}
+.c-free{background:var(--plum);border-color:var(--plum);color:#fff}
+.c-skip{background:var(--skip);border-color:var(--skip);color:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;font-size:.85rem}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.list h3{font-size:1rem;margin:18px 0 6px}
+.list p{margin:2px 0;font-size:.9rem}
+.list .m{color:var(--muted)}
+.backup{margin-top:22px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.backup h3{margin:0 0 4px;font-size:1rem}
+.backup p{margin:0 0 10px;font-size:.85rem;color:var(--muted)}
+.brow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.brow button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 4px;font:inherit;font-size:.85rem;font-weight:600;cursor:pointer}
+button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="daterow">
+    <button class="navbtn" id="prev" aria-label="Giorno precedente">‹</button>
+    <div style="text-align:center">
+      <h1 id="title">—</h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <button class="navbtn" id="next" aria-label="Giorno successivo">›</button>
+  </div>
+  <div class="strip" id="strip"></div>
+</div></header>
+
+<main class="wrap">
+  <section id="dayView"></section>
+  <section id="weekView" hidden></section>
+  <div class="status" id="status">Caricamento…</div>
+</main>
+
+<nav class="tabs">
+  <button id="tabDay" class="on">Giorno</button>
+  <button id="tabWeek">Settimana</button>
+</nav>
+
+<script>
+const DAYS=["lunedì","martedì","mercoledì","giovedì","venerdì","sabato","domenica"];
+const MEALS=[["colazione","Colazione"],["sp_matt","Spuntino mattina"],["pranzo","Pranzo"],["sp_pom","Spuntino pomeriggio"],["cena","Cena"]];
+const PLAN=[
+ {colazione:"Uova (2), pane integrale 80g",sp_matt:"Frutta secca 10g, 1 frutto",pranzo:"Pasta integrale 80g, pesce spada 150g, pomodori, melanzane",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Petto di pollo 200g, insalata verde e pomodorini"},
+ {colazione:"Affettato magro 70g, pane integrale 70g",sp_matt:"1 frutto",pranzo:"Farro 50g, legumi 60g, verdure",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Vitello alla piastra 200g, verdure al vapore"},
+ {colazione:"Uova (2), pane integrale 80g",sp_matt:"1 frutto",pranzo:"Pasta integrale 80g al pomodorino, mozzarella 150g, zucchine",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Pesce bianco al forno 200g, verdure"},
+ {colazione:"Pane integrale 70g, affettato magro 70g",sp_matt:"10 mandorle",pranzo:"Riso basmati 80g, salmone affumicato 120g, verdure cotte",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Orata al forno 200g, insalata mista"},
+ {colazione:"Uova (2), pane integrale 70g",sp_matt:"1 frutto (150g)",pranzo:"Gnocchi 200g al pomodoro + parmigiano, macinato di manzo 150g",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Tagliata di pollo 200g, verdure cotte"},
+ {colazione:"Yogurt greco 0% 150g, cereali 40g",sp_matt:"1 mela, noci 10g",pranzo:"Cous cous 70g, tonno naturale 120g, zucchine e pomodorini",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Pizza"},
+ {colazione:"Yogurt greco 0% 150g, 1 frutto",sp_matt:"Frutta secca 10g",pranzo:"Pasta 70g al pomodoro + cacioricotta, pesce 200g, insalata verde",sp_pom:"1 frutto",cena:"Insalata con straccetti di pollo 150g, pomodori, caroselli, carote, rucola"}
+];
+const SWAP_GROUP={colazione:["colazione"],sp_matt:["sp_matt","sp_pom"],sp_pom:["sp_matt","sp_pom"],pranzo:["pranzo","cena"],cena:["pranzo","cena"]};
+const STATES=[["ok","Fatto"],["swap","Scambiato"],["other","Altro"],["free","Libero"],["skip","Saltato"]];
+const LABEL=Object.fromEntries(STATES);
+const LETTER={ok:"✓",swap:"⇄",other:"A",free:"L",skip:"✕"};
+const COLOR={ok:"green",swap:"teal",other:"amber",free:"plum",skip:"skip"};
+const MEAL_NAME=Object.fromEntries(MEALS);
+const LS_KEY="diario_pasti_v1";
+
+const pad=n=>String(n).padStart(2,"0");
+const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const dayIdx=d=>(d.getDay()+6)%7;
+const fromIso=s=>{const [y,m,dd]=s.split("-").map(Number);return new Date(y,m-1,dd)};
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const monday=d=>addDays(d,-dayIdx(d));
+const slotName=(di,m)=>MEAL_NAME[m]+" di "+DAYS[di];
+
+let cur=new Date(); cur.setHours(0,0,0,0);
+let view="day", openMeal=null;
+let logs={};             // iso -> {slots:{}, note:""}
+const dirty=new Set();   // keys changed locally and not yet confirmed by the server
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clone=o=>JSON.parse(JSON.stringify(o||{slots:{},note:""}));
+function getLog(k){return logs[k]||{slots:{},note:""}}
+
+/* ---------- saving (this device only) ---------- */
+function status(t){$("status").textContent=t}
+function saveLocal(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(logs));status("Salvato su questo iPhone")}
+  catch(e){status("Salvataggio non riuscito: esporta un backup.")}
+}
+function commit(k){saveLocal()}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")saveLocal()});
+window.addEventListener("pagehide",saveLocal);
+
+/* ---------- backup ---------- */
+const MEAL_ORDER=MEALS.map(m=>m[0]);
+function stamp(){const d=new Date();return iso(d)+"_"+pad(d.getHours())+pad(d.getMinutes())}
+async function deliver(filename,text,type){
+  const blob=new Blob([text],{type});
+  const file=new File([blob],filename,{type});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:filename});return}catch(e){if(e&&e.name==="AbortError")return}
+  }
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+function exportJSON(){
+  deliver("diario_pasti_"+stamp()+".json",JSON.stringify({app:"diario_pasti",version:1,exported:new Date().toISOString(),logs},null,1),"application/json");
+}
+function csvCell(v){v=String(v??"");return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function exportCSV(){
+  const rows=[["data","giorno","pasto","stato","dettaglio","previsto_da_piano","nota_giorno"]];
+  for(const k of Object.keys(logs).sort()){
+    const d=fromIso(k),di=dayIdx(d),L=logs[k],W=weekSwaps(d);
+    for(const m of MEAL_ORDER){
+      const sl=L.slots[m]; if(!sl) continue;
+      rows.push([k,DAYS[di],MEAL_NAME[m],LABEL[sl.s],describe(sl),effectivePlan(di,m,W).text,""]);
+    }
+    if(L.note) rows.push([k,DAYS[di],"","","","",L.note]);
+  }
+  // semicolon + BOM so Excel/Numbers in Italian locale open it correctly
+  deliver("diario_pasti_"+stamp()+".csv","\ufeff"+rows.map(r=>r.map(csvCell).join(";")).join("\n"),"text/csv");
+}
+function importJSON(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let data;
+    try{data=JSON.parse(r.result)}catch(e){alert("File non valido: non è un JSON.");return}
+    const inc=data&&data.logs;
+    if(!inc||typeof inc!=="object"){alert("File non valido: manca l'elenco dei giorni.");return}
+    const keys=Object.keys(inc).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k));
+    const overlap=keys.filter(k=>logs[k]).length;
+    if(!confirm("Importare "+keys.length+" giorni?"+(overlap?" "+overlap+" giorni già presenti verranno sostituiti.":""))) return;
+    for(const k of keys){const v=inc[k];logs[k]={slots:(v&&v.slots)||{},note:(v&&v.note)||""}}
+    saveLocal();render();alert("Importati "+keys.length+" giorni.");
+  };
+  r.readAsText(file);
+}
+
+/* ---------- swaps within the week ---------- */
+// Returns info for the week containing date d:
+//  takenBy[slot]  = slot that took this slot's meal   (slot = "di|meal")
+//  gave[slot]     = slot whose meal this slot ate
+function weekSwaps(d){
+  const mon=monday(d), takenBy={}, gave={};
+  for(let i=0;i<7;i++){
+    const L=getLog(iso(addDays(mon,i)));
+    for(const [m] of MEALS){
+      const s=L.slots[m];
+      if(s&&s.s==="swap"&&s.from){const me=i+"|"+m; gave[me]=s.from; takenBy[s.from]=me;}
+    }
+  }
+  return {takenBy,gave};
+}
+// What the plan says for a slot after swaps: if another slot ate my meal, I get that slot's original meal.
+function effectivePlan(di,m,W){
+  const me=di+"|"+m, taker=W.takenBy[me];
+  if(taker){const [tdi,tm]=taker.split("|");return {text:PLAN[+tdi][tm],note:"Scambiato con "+slotName(+tdi,tm).toLowerCase()}}
+  return {text:PLAN[di][m],note:""};
+}
+function describe(slot){
+  if(!slot) return "";
+  if(slot.s==="swap"&&slot.from){const [di,m]=slot.from.split("|");return slotName(+di,m)+": "+PLAN[+di][m]}
+  return slot.txt||"";
+}
+function setSlot(k,meal,patch){
+  const L=clone(getLog(k)), next={...(L.slots[meal]||{}),...patch};
+  if(!next.s) delete L.slots[meal]; else L.slots[meal]=next;
+  logs[k]=L; commit(k); render();
+}
+
+/* ---------- rendering ---------- */
+function renderStrip(){
+  const mon=monday(cur), today=iso(new Date());
+  $("strip").innerHTML=DAYS.map((d,i)=>{
+    const dt=addDays(mon,i),k=iso(dt),L=getLog(k);
+    const dots=MEALS.map(([m])=>{const s=L.slots[m]?.s;return `<i style="${s?`background:var(--${COLOR[s]})`:""}"></i>`}).join("");
+    return `<button class="chip ${k===iso(cur)?"on":""} ${k===today?"today":""}" data-k="${k}">
+      <div class="d">${d.slice(0,3)}</div><div class="n">${dt.getDate()}</div><div class="dots">${dots}</div></button>`;
+  }).join("");
+  $("strip").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{cur=fromIso(b.dataset.k);openMeal=null;render()});
+}
+
+function renderDay(){
+  const k=iso(cur),di=dayIdx(cur),L=getLog(k),W=weekSwaps(cur);
+  $("title").textContent=DAYS[di];
+  $("subtitle").textContent=cur.toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});
+  let html="";
+  for(const [m,name] of MEALS){
+    const slot=L.slots[m], s=slot?.s, me=di+"|"+m;
+    const eff=effectivePlan(di,m,W);
+    const isSource=!!W.takenBy[me];
+    const swapOpts=swapOptions(di,m,W);
+    const canSwap=!isSource&&(s==="swap"||swapOpts.some(o=>!o.disabled));
+    html+=`<article class="meal ${s?"st-"+s:""}">
+      <div class="mhead"><span class="mname">${name}</span>${s?`<span class="badge b-${s}">${LABEL[s]}</span>`:""}</div>
+      ${eff.note?`<div class="swapnote">${esc(eff.note)}</div>`:""}
+      <div class="planned ${s&&s!=="ok"?"strike":""}">${esc(eff.text)}</div>
+      ${s&&s!=="ok"&&describe(slot)?`<div class="actual">${esc(describe(slot))}</div>`:""}
+      <div class="actions">${STATES.map(([id,lab])=>`<button class="act a-${id}" aria-pressed="${s===id}" data-m="${m}" data-s="${id}" ${id==="swap"&&!canSwap?"disabled":""}>${lab}</button>`).join("")}</div>
+      ${openMeal===m&&s&&s!=="ok"?editor(m,slot,swapOpts):""}
+    </article>`;
+  }
+  html+=`<div class="notes"><label for="note">Note del giorno</label>
+    <textarea id="note" placeholder="Fame, energia, allenamento, acqua…">${esc(L.note||"")}</textarea></div>`;
+  $("dayView").innerHTML=html;
+
+  $("dayView").querySelectorAll(".act").forEach(b=>b.onclick=()=>{
+    const m=b.dataset.m,s=b.dataset.s,curS=getLog(k).slots[m]?.s;
+    if(curS===s){
+      if(s==="ok"||openMeal===m){openMeal=null;setSlot(k,m,{s:null,from:null,txt:null});}
+      else{openMeal=m;render();}
+      return;
+    }
+    let from=null;
+    if(s==="swap"){const first=swapOptions(di,m,weekSwaps(cur)).find(o=>!o.disabled);if(!first) return;from=first.value;}
+    openMeal=(s==="ok")?null:m;
+    setSlot(k,m,{s,from,txt:(s==="ok"||s==="swap")?null:(getLog(k).slots[m]?.txt||"")});
+  });
+  const sel=$("dayView").querySelector("select");
+  if(sel) sel.onchange=()=>setSlot(k,sel.dataset.m,{from:sel.value});
+  const ta=$("dayView").querySelector("textarea[data-m]");
+  if(ta) ta.oninput=()=>{const L2=clone(getLog(k));L2.slots[ta.dataset.m]={...L2.slots[ta.dataset.m],txt:ta.value};logs[k]=L2;commit(k);};
+  $("note").oninput=e=>{const L2=clone(getLog(k));L2.note=e.target.value;logs[k]=L2;commit(k);};
+}
+
+// A meal can be used in only one swap per week: slots already given away, or whose own meal was replaced, are excluded.
+function swapOptions(di,m,W){
+  const me=di+"|"+m, mine=W.gave[me]||null, opts=[];
+  for(let d=0;d<7;d++) for(const g of SWAP_GROUP[m]){
+    const v=d+"|"+g;
+    if(v===me) continue;
+    const used=(W.takenBy[v]&&W.takenBy[v]!==me)||(W.gave[v]&&v!==mine);
+    opts.push({value:v,disabled:!!used&&v!==mine,label:slotName(d,g)+" — "+PLAN[d][g]+(used&&v!==mine?" (già scambiato)":"")});
+  }
+  return opts;
+}
+function editor(m,slot,opts){
+  if(slot.s==="swap"){
+    return `<div class="editor"><select data-m="${m}" aria-label="Pasto mangiato al posto di quello previsto">${
+      opts.map(o=>`<option value="${o.value}" ${slot.from===o.value?"selected":""} ${o.disabled?"disabled":""}>${esc(o.label)}</option>`).join("")}</select></div>`;
+  }
+  const ph={other:"Cosa hai mangiato?",free:"Cosa hai mangiato? (facoltativo)",skip:"Motivo (facoltativo)"}[slot.s];
+  return `<div class="editor"><textarea data-m="${m}" placeholder="${ph}">${esc(slot.txt||"")}</textarea></div>`;
+}
+
+function renderWeek(){
+  const mon=monday(cur),sun=addDays(mon,6);
+  $("title").textContent="Settimana";
+  $("subtitle").textContent=mon.toLocaleDateString("it-IT",{day:"numeric",month:"short"})+" – "+sun.toLocaleDateString("it-IT",{day:"numeric",month:"short"});
+  let g=`<div class="grid"><div></div>${DAYS.map(d=>`<div class="h">${d.slice(0,3)}</div>`).join("")}`;
+  const counts={ok:0,swap:0,other:0,free:0,skip:0};
+  for(const [m,name] of MEALS){
+    g+=`<div class="rl">${name.replace("Spuntino ","Sp. ")}</div>`;
+    for(let i=0;i<7;i++){
+      const k=iso(addDays(mon,i)),s=getLog(k).slots[m]?.s;
+      if(s) counts[s]++;
+      g+=`<button class="cell ${s?"c-"+s:""}" data-k="${k}" aria-label="${name} ${DAYS[i]}: ${s?LABEL[s]:"non segnato"}">${s?LETTER[s]:""}</button>`;
+    }
+  }
+  g+=`</div>`;
+  const legend=`<div class="legend">${STATES.map(([id,l])=>`<span><i style="background:var(--${COLOR[id]})"></i>${l} ${counts[id]}</span>`).join("")}</div>`;
+  let list="";
+  for(let i=0;i<7;i++){
+    const k=iso(addDays(mon,i)),L=getLog(k);
+    const rows=MEALS.filter(([m])=>L.slots[m]&&L.slots[m].s!=="ok").map(([m,n])=>{const sl=L.slots[m];return `<p><b>${n}</b> <span class="m">(${LABEL[sl.s]})</span> ${esc(describe(sl))}</p>`});
+    if(rows.length||L.note) list+=`<h3 style="text-transform:capitalize">${DAYS[i]} ${addDays(mon,i).getDate()}</h3>${rows.join("")}${L.note?`<p class="m">Nota: ${esc(L.note)}</p>`:""}`;
+  }
+  const backup=`<div class="backup"><h3>Backup</h3>
+    <p>I dati sono salvati solo su questo iPhone. Esporta un backup ogni tanto; il CSV si apre con Numbers o Excel.</p>
+    <div class="brow"><button id="bJson">Esporta JSON</button><button id="bCsv">Esporta CSV</button><button id="bImp">Importa JSON</button></div>
+    <input type="file" id="fImp" accept="application/json,.json" hidden></div>`;
+  $("weekView").innerHTML=g+legend+(list?`<div class="list">${list}</div>`:"")+backup;
+  $("bJson").onclick=exportJSON; $("bCsv").onclick=exportCSV;
+  $("bImp").onclick=()=>$("fImp").click();
+  $("fImp").onchange=e=>{const f=e.target.files[0];if(f)importJSON(f);e.target.value=""};
+  $("weekView").querySelectorAll(".cell").forEach(c=>c.onclick=()=>{cur=fromIso(c.dataset.k);setView("day")});
+}
+
+function render(){
+  renderStrip();
+  if(view==="day"){
+    const a=document.activeElement, id=a&&a.id, isTa=a&&a.matches&&a.matches("textarea[data-m]"), pos=a&&a.selectionStart;
+    renderDay();
+    const t=id==="note"?$("note"):isTa?$("dayView").querySelector("textarea[data-m]"):null;
+    if(t){t.focus();try{t.setSelectionRange(pos,pos)}catch(e){}}
+  } else renderWeek();
+}
+function setView(v){
+  view=v;$("dayView").hidden=v!=="day";$("weekView").hidden=v!=="week";
+  $("tabDay").classList.toggle("on",v==="day");$("tabWeek").classList.toggle("on",v==="week");
+  render();window.scrollTo(0,0);
+}
+$("tabDay").onclick=()=>setView("day");
+$("tabWeek").onclick=()=>setView("week");
+$("prev").onclick=()=>{cur=addDays(cur,view==="day"?-1:-7);openMeal=null;render()};
+$("next").onclick=()=>{cur=addDays(cur,view==="day"?1:7);openMeal=null;render()};
+
+/* ---------- startup ---------- */
+try{logs=JSON.parse(localStorage.getItem(LS_KEY)||"{}")||{}}catch(e){logs={}}
+if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
+render();
+status(Object.keys(logs).length?"Salvato su questo iPhone":"Nessun dato ancora: inizia a segnare i pasti.");
+</script>
+</body>
+</html>
