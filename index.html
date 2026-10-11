@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Diario pasti">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#1F6F7A">
-<meta name="app-version" content="2026-09-15.3">
+<meta name="app-version" content="2026-10-11.2">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +33,7 @@
   --ok-bg:#27351A; --swap-bg:#1A3336; --other-bg:#3A2F17; --free-bg:#33273A; --skip-bg:#3A2320;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
 body{font-family:Figtree,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4;
   padding:env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
@@ -85,7 +86,7 @@ textarea{min-height:64px;resize:vertical}
 .status{color:var(--muted);font-size:.8rem;text-align:center;margin:12px 0}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
   display:flex;padding:8px 16px calc(8px + env(safe-area-inset-bottom));z-index:6}
-nav.tabs button{flex:1;border:0;background:none;font:inherit;font-weight:600;color:var(--muted);padding:10px;border-radius:10px;cursor:pointer}
+nav.tabs button{flex:1;border:0;background:none;font:inherit;font-weight:600;font-size:.92rem;color:var(--muted);padding:10px 4px;border-radius:10px;cursor:pointer}
 nav.tabs button.on{color:var(--teal);background:var(--swap-bg)}
 .grid{display:grid;grid-template-columns:78px repeat(7,1fr);gap:4px;font-size:.78rem}
 .grid .h{font-weight:700;text-align:center;color:var(--muted);padding:4px 0;text-transform:capitalize}
@@ -118,6 +119,17 @@ nav.tabs button.on{color:var(--teal);background:var(--swap-bg)}
 .update span{flex:1;font-size:.9rem;font-weight:600}
 .update button{border:0;background:#fff;color:#1F6F7A;border-radius:10px;padding:9px 12px;font:inherit;font-weight:700;cursor:pointer}
 .ver{text-align:center;font-size:.72rem;color:var(--muted);margin:-4px 0 8px}
+.sub-intro{font-size:.9rem;color:var(--muted);margin:0 0 12px}
+details.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;margin-bottom:10px;overflow:hidden}
+details.card>summary{list-style:none;cursor:pointer;padding:14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:"+";color:var(--teal);font-weight:800;font-size:1.2rem}
+details.card[open]>summary::after{content:"−"}
+details.card>summary small{display:block;font-weight:500;color:var(--muted);font-size:.8rem;margin-top:2px}
+.sub-body{padding:0 14px 14px}
+.eq{display:flex;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:.92rem}
+.eq b{color:var(--teal);font-weight:700;white-space:nowrap}
+.caveat{margin-top:10px;padding:10px;border-radius:10px;background:var(--bg);font-size:.82rem;color:var(--muted)}
 button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
 </style>
 </head>
@@ -137,18 +149,22 @@ button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px sol
 <main class="wrap">
   <section id="dayView"></section>
   <section id="weekView" hidden></section>
+  <section id="subView" hidden></section>
   <div class="status" id="status">Caricamento…</div>
 </main>
 
 <nav class="tabs">
   <button id="tabDay" class="on">Giorno</button>
   <button id="tabWeek">Settimana</button>
+  <button id="tabSub">Sostituzioni</button>
 </nav>
 
 <script>
 const DAYS=["lunedì","martedì","mercoledì","giovedì","venerdì","sabato","domenica"];
 const MEALS=[["colazione","Colazione"],["sp_matt","Spuntino mattina"],["pranzo","Pranzo"],["sp_pom","Spuntino pomeriggio"],["cena","Cena"]];
-const PLAN=[
+// Piani in vigore, dal più vecchio al più recente: ogni giorno usa il piano valido in quella data.
+const PLANS=[
+ {from:"0000-01-01",name:"Piano iniziale",days:[
  {colazione:"Uova (2), pane integrale 80g",sp_matt:"Frutta secca 10g, 1 frutto",pranzo:"Pasta integrale 80g, pesce spada 150g, pomodori, melanzane",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Petto di pollo 200g, insalata verde e pomodorini"},
  {colazione:"Affettato magro 70g, pane integrale 70g",sp_matt:"1 frutto",pranzo:"Farro 50g, legumi 60g, verdure",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Vitello alla piastra 200g, verdure al vapore"},
  {colazione:"Uova (2), pane integrale 80g",sp_matt:"1 frutto",pranzo:"Pasta integrale 80g al pomodorino, mozzarella 150g, zucchine",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Pesce bianco al forno 200g, verdure"},
@@ -156,7 +172,18 @@ const PLAN=[
  {colazione:"Uova (2), pane integrale 70g",sp_matt:"1 frutto (150g)",pranzo:"Gnocchi 200g al pomodoro + parmigiano, macinato di manzo 150g",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Tagliata di pollo 200g, verdure cotte"},
  {colazione:"Yogurt greco 0% 150g, cereali 40g",sp_matt:"1 mela, noci 10g",pranzo:"Cous cous 70g, tonno naturale 120g, zucchine e pomodorini",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Pizza"},
  {colazione:"Yogurt greco 0% 150g, 1 frutto",sp_matt:"Frutta secca 10g",pranzo:"Pasta 70g al pomodoro + cacioricotta, pesce 200g, insalata verde",sp_pom:"1 frutto",cena:"Insalata con straccetti di pollo 150g, pomodori, caroselli, carote, rucola"}
+]},
+ {from:"2026-10-12",name:"Piano dal 12 ottobre 2026",days:[
+ {colazione:"Uova (2), pane integrale 60g, avocado 50g",sp_matt:"Frutta secca 15g, 1 banana",pranzo:"Pasta integrale 100g con funghi, macinato di manzo 150g, pomodori",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Salmone al forno 200g, patate al vapore 200g, insalata verde con pomodorini"},
+ {colazione:"Affettato magro 70g, pane tostato 60g, frutta secca 20g",sp_matt:"1 frutto, 1 pacco di crackers",pranzo:"Riso basmati 100g con zucca, tacchino ai ferri 200g",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Pangasio 200g, verdure miste al vapore, patate 300g"},
+ {colazione:"Uova (2), pane integrale 60g, avocado 50g",sp_matt:"Frutta secca 15g, 1 banana",pranzo:"Pasta integrale 100g con pomodorino e 2 cucchiai di parmigiano, filetto di manzo magro 200g, insalata verde e pomodori",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Merluzzo al forno 200g, patate 300g, minestrone"},
+ {colazione:"Affettato magro 70g, pane tostato 60g, frutta secca 20g",sp_matt:"1 frutto, 1 pacco di crackers",pranzo:"Riso basmati 100g con legumi 70g, verdure miste cotte",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Entrecôte 200g, patate lesse 250g, insalata mista"},
+ {colazione:"Uova (2), pane integrale 60g, avocado 50g",sp_matt:"Frutta secca 15g, 1 banana",pranzo:"Pasta integrale 100g con broccoli, lonza di maiale alla piastra 150g, carote e zucchine",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Spigola o sogliola 200g, patate al forno 300g, verdure cotte"},
+ {colazione:"Affettato magro 70g, pane tostato 60g, frutta secca 20g",sp_matt:"1 frutto, 1 pacco di crackers",pranzo:"Cous cous 70g, tonno naturale 150g, zucchine e pomodorini",sp_pom:"Yogurt greco 0% 150g, frutta 150g",cena:"Pizza"},
+ {colazione:"Pancake proteici (albume 200g + avena 100g + banana 100g) + marmellata zero",sp_matt:"Frutta secca 10g",pranzo:"Pasta 100g con salsa di pomodoro + 1 cucchiaio di parmigiano, 200g di carne o di pesce",sp_pom:"Yogurt greco 0% 150g, 1 frutto",cena:"Insalata, mozzarella 150g o fiocchi di latte 200g, pane 60g, pomodori, caroselli"}
+]}
 ];
+function planFor(k){let p=PLANS[0];for(const x of PLANS){if(x.from<=k)p=x}return p}
 const SWAP_GROUP={colazione:["colazione"],sp_matt:["sp_matt","sp_pom"],sp_pom:["sp_matt","sp_pom"],pranzo:["pranzo","cena"],cena:["pranzo","cena"]};
 const STATES=[["ok","Fatto"],["other","Altro"],["free","Libero"],["skip","Saltato"]];
 const LABEL=Object.fromEntries(STATES);
@@ -187,7 +214,7 @@ function getLog(k){return logs[k]||{slots:{},note:""}}
 const slotKey=(k,m)=>k+"|"+m;
 const splitSlot=v=>{const i=v.lastIndexOf("|");return [v.slice(0,i),v.slice(i+1)]};
 const slotName=v=>{const [k,m]=splitSlot(v);return MEAL_NAME[m]+" di "+DAYS[dayIdx(fromIso(k))]};
-const planText=v=>{const [k,m]=splitSlot(v);return PLAN[dayIdx(fromIso(k))][m]};
+const planText=v=>{const [k,m]=splitSlot(v);return planFor(k).days[dayIdx(fromIso(k))][m]};
 function assigned(v){const [k,m]=splitSlot(v);return (logs[k]&&logs[k].assign&&logs[k].assign[m])||v}
 function setAssign(v,val){
   const [k,m]=splitSlot(v),L=clone(getLog(k));
@@ -305,6 +332,7 @@ function renderDay(){
   $("title").textContent=DAYS[di];
   $("subtitle").textContent=cur.toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"});
   let html="";
+  if(planFor(k)!==PLANS[PLANS.length-1]) html+=`<div class="hint" style="padding:0 2px 10px">Questo giorno segue il ${esc(planFor(k).name.toLowerCase())}.</div>`;
   for(const [m,name] of MEALS){
     const v=slotKey(k,m), a=assigned(v), swapped=a!==v;
     const slot=L.slots[m], s=slot?.s;
@@ -407,8 +435,41 @@ function renderWeek(){
   $("weekView").querySelectorAll(".cell").forEach(c=>c.onclick=()=>{cur=fromIso(c.dataset.k);setView("day")});
 }
 
+const SUBS=[
+ {t:"Carboidrati",s:"Partendo da 60g di pasta secca",
+  r:[["60 g","riso, cous cous, bulgur o quinoa secchi"],["40 g","farro o orzo secchi"],["60 g","pane"],
+     ["200 g","patate crude (180–200 g cotte, secondo la cottura)"],["50 g","crackers semplici"],
+     ["50–60 g","fette biscottate"]],
+  c:"Pane, crackers e prodotti da forno hanno quantità di grassi molto diverse tra loro. Se il prodotto è ricco di olio o semi, riduci la quantità."},
+ {t:"Proteine",s:"Partendo da 150g di carne magra",
+  r:[["150 g","pollo o tacchino"],["150–180 g","pesce magro"],["120–150 g","pesce più grasso"],
+     ["170–200 g","albume"],["2 uova","+ una piccola fonte proteica, quando prevista dal piano"]],
+  c:"I legumi possono sostituire carne o pesce, ma apportano anche carboidrati: vanno considerati nell'insieme del pasto."},
+ {t:"Grassi",s:"Mai sostituire “a peso”",
+  r:[["5 g olio EVO","5 g di altri oli vegetali"],["10 g olio EVO","15–20 g di frutta secca (mandorle, noci, nocciole)"],
+     ["10 g olio EVO","15 g di semi oleosi"],["10 g olio EVO","50–60 g di avocado"]],
+  c:"La concentrazione di grassi varia molto tra gli alimenti: una sostituzione a parità di peso cambia parecchio le calorie del pasto."},
+ {t:"Legumi",s:"Sia carboidrati sia proteine",
+  r:[["50 g secchi","130–150 g cotti"],["50 g secchi","120–150 g in scatola, sgocciolati"]],
+  c:"Una porzione di legumi può sostituire una fonte di carboidrati oppure essere la proteina principale del pasto. In quel caso è preferibile abbinarli a un cereale."},
+ {t:"Crudo → cotto",s:"Le grammature del piano sono sempre a crudo",
+  r:[["Pasta, riso, cereali","cotto ≈ 2,5–3 × il crudo"],["Legumi","cotto ≈ 2,5–3 × il secco"],
+     ["Carne e pesce","cotto ≈ 70–80% del crudo"],["Patate","200 g crude ≈ 150–170 g cotte"],
+     ["1 uovo medio","≈ 50 g di parte edibile"],["Olio EVO","1 cucchiaino = 5 g · 1 cucchiaio = 10 g"]],
+  c:""}
+];
+function renderSub(){
+  $("title").textContent="Sostituzioni";
+  $("subtitle").textContent="Equivalenze indicative";
+  $("subView").innerHTML=`<p class="sub-intro">Si sostituisce sempre dentro la stessa categoria: carboidrati con carboidrati, proteine con proteine, grassi con grassi. Le equivalenze sono indicative e vanno valutate sull'intero pasto.</p>`
+   +SUBS.map((x,i)=>`<details class="card" ${i===0?"open":""}><summary><span>${esc(x.t)}<small>${esc(x.s)}</small></span></summary>
+      <div class="sub-body">${x.r.map(([a,b])=>`<div class="eq"><b>${esc(a)}</b><span>${esc(b)}</span></div>`).join("")}
+      ${x.c?`<div class="caveat">${esc(x.c)}</div>`:""}</div></details>`).join("")
+   +`<div class="caveat">Due alimenti con macronutrienti simili possono differire per calorie, fibre, vitamine e minerali. Per modifiche stabili del piano, sentire il nutrizionista.</div>`;
+}
 function render(){
   renderStrip();
+  if(view==="sub"){renderSub();return}
   if(view==="day"){
     const a=document.activeElement, id=a&&a.id, isTa=a&&a.matches&&a.matches("textarea[data-m]"), pos=a&&a.selectionStart;
     renderDay();
@@ -417,14 +478,18 @@ function render(){
   } else renderWeek();
 }
 function setView(v){
-  view=v;$("dayView").hidden=v!=="day";$("weekView").hidden=v!=="week";
-  $("tabDay").classList.toggle("on",v==="day");$("tabWeek").classList.toggle("on",v==="week");
+  view=v;
+  $("dayView").hidden=v!=="day";$("weekView").hidden=v!=="week";$("subView").hidden=v!=="sub";
+  $("tabDay").classList.toggle("on",v==="day");$("tabWeek").classList.toggle("on",v==="week");$("tabSub").classList.toggle("on",v==="sub");
+  const nav=v!=="sub";
+  $("strip").hidden=!nav;$("prev").hidden=!nav;$("next").hidden=!nav;
   render();window.scrollTo(0,0);
 }
 $("tabDay").onclick=()=>setView("day");
 $("tabWeek").onclick=()=>setView("week");
-$("prev").onclick=()=>{cur=addDays(cur,view==="day"?-1:-7);openMeal=openSwap=null;render()};
-$("next").onclick=()=>{cur=addDays(cur,view==="day"?1:7);openMeal=openSwap=null;render()};
+$("tabSub").onclick=()=>setView("sub");
+$("prev").onclick=()=>{if(view==="sub")return;cur=addDays(cur,view==="day"?-1:-7);openMeal=openSwap=null;render()};
+$("next").onclick=()=>{if(view==="sub")return;cur=addDays(cur,view==="day"?1:7);openMeal=openSwap=null;render()};
 
 /* ---------- updates ---------- */
 const APP_VERSION=document.querySelector('meta[name="app-version"]').content;
